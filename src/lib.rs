@@ -1,8 +1,7 @@
-use oorandom;
-
 #[cfg(feature = "buddy-alloc")]
 mod alloc;
 mod wasm4;
+
 use wasm4::*;
 
 const CURSOR_SIZE: u8 = 4;
@@ -12,24 +11,25 @@ const CENTER: Point = Point::new(80.0, 80.0);
 // rect, oval, line, text
 const COLORS: u8 = 4;
 static mut FRAME_COUNT: u32 = 0;
-static mut RNG: Option<oorandom::Rand32> = None;
+static mut WORLD: World = World::new();
 
 #[no_mangle]
 fn start() {
+    let circle = Circle::new(CENTER, 20., 0, 255);
+
     unsafe {
         //*PALETTE = [0x9775a6, 0x683a68, 0x412752, 0x2d162c];
         *PALETTE = [0x2d162c, 0x412752, 0x683a68, 0x9775a6];
-    }
-    unsafe { *DRAW_COLORS = 0x4321 }
-
-    unsafe {
-        RNG = Some(oorandom::Rand32::new(0));
+        *DRAW_COLORS = 0x4321;
+        WORLD.add(circle);
     }
 }
 
 #[no_mangle]
 fn update() {
     let time = unsafe { FRAME_COUNT as f32 / 60. };
+    let mut World = unsafe { WORLD.clone() };
+    let mut random = unsafe { oorandom::Rand32::new(FRAME_COUNT.into()) };
     let gamepad = unsafe { *GAMEPAD1 };
     if gamepad & BUTTON_1 != 0 {
         unsafe { *DRAW_COLORS = 4 }
@@ -41,6 +41,8 @@ fn update() {
 
     if mouse_pressed != 0 {}
 
+    //World.update();
+    World.move_origin(Point::new(0.2, 0.2));
     for x in 0..SCREEN_SIZE {
         for y in 0..SCREEN_SIZE {
             let brightness = y;
@@ -51,11 +53,9 @@ fn update() {
     let gradient = Gradient::new(Rectangle::new(Point::new(20., 0.), 100., 30.), 160, 200);
     gradient.draw();
 
-    let circle1 = Circle::new(Point::new(7., 7.), 4., 0, 0);
-    circle1.draw();
-    let circle2 = Circle::new(CENTER, 40. + time.sin() * 10., 0, 255);
-    circle2.draw_as_gradient();
-
+    let circle2 = Circle::new(CENTER, 40. + time * 10., 0, 255);
+    circle2.draw();
+    World.draw();
     {
         let offset = (CURSOR_SIZE / 2) as i16;
 
@@ -72,6 +72,7 @@ fn update() {
     }
     unsafe {
         FRAME_COUNT += 1;
+        WORLD = World;
     }
 }
 
@@ -163,6 +164,39 @@ fn circle(pos: &Point, radius: i32) {
     );
 }
 
+#[derive(Clone)]
+struct World {
+    origin: Point,
+    circles: Vec<Circle>,
+}
+
+impl World {
+    const fn new() -> Self {
+        Self {
+            origin: Point::new(0., 0.),
+            circles: Vec::new(),
+        }
+    }
+    fn add(&mut self, circle: Circle) {
+        self.circles.push(circle);
+    }
+    fn update(&mut self) {
+        todo!();
+    }
+    fn move_origin(&mut self, delta: Point) {
+        self.origin = self.origin + delta;
+        for circle in &mut self.circles {
+            circle.origin = circle.origin + delta;
+        }
+    }
+    fn draw(&self) {
+        for circle in &self.circles {
+            circle.draw();
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Point {
     pub x: f32,
     pub y: f32,
@@ -177,6 +211,16 @@ impl Point {
         let delta_x = self.x - other.x;
         let delta_y = self.y - other.y;
         (delta_x * delta_x + delta_y * delta_y).sqrt()
+    }
+}
+
+impl std::ops::Add for Point {
+    type Output = Point;
+    fn add(self, other: Point) -> Self {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
     }
 }
 
@@ -229,11 +273,12 @@ impl Gradient {
     }
 }
 
+#[derive(Clone)]
 struct Circle {
-    origin: Point,
-    radius: f32,
-    color_center: u32,
-    color_end: u32,
+    pub origin: Point,
+    pub radius: f32,
+    pub color_center: u32,
+    pub color_end: u32,
 }
 
 impl Circle {
@@ -245,11 +290,11 @@ impl Circle {
             color_end,
         }
     }
-    fn draw(&self) {
+    fn draw_simple(&self) {
         circle(&self.origin, self.radius as i32);
     }
 
-    fn draw_as_gradient(&self) {
+    fn draw(&self) {
         for screen_y in 0..SCREEN_SIZE {
             for screen_x in 0..SCREEN_SIZE {
                 let screen_point = Point::new(screen_x as f32, screen_y as f32);
