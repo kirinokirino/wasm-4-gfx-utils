@@ -1,1 +1,0 @@
-/home/k/Documents/wasm-4/wasm-4-gfx-utils/target/wasm32-unknown-unknown/release/cart.wasm: /home/k/Documents/wasm-4/wasm-4-gfx-utils/src/alloc.rs /home/k/Documents/wasm-4/wasm-4-gfx-utils/src/lib.rs /home/k/Documents/wasm-4/wasm-4-gfx-utils/src/wasm4.rs
